@@ -1,0 +1,695 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  INSTRUCTOR
+  STUDENT
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+  PENDING_VERIFICATION
+}
+
+enum AssignmentStatus {
+  PUBLISHED
+  DRAFT
+  ARCHIVED
+  SUBMITTED
+  IN_REVIEW
+  APPROVED
+  REJECTED
+  NEEDS_REVISION
+}
+
+enum CourseStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  UNDER_REVIEW
+}
+
+enum LessonStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  UNDER_REVIEW
+}
+
+enum TopicStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+  UNDER_REVIEW
+}
+
+enum PaymentStatus {
+  PENDING
+  COMPLETED
+  FAILED
+  REFUNDED
+  CANCELLED
+}
+
+enum LessonType {
+  VIDEO
+  PDF
+  QUIZ
+  OTHER
+}
+
+enum SettingDataType {
+  TEXT
+  ARRAY
+  BOOLEAN
+  NUMBER
+  OBJECT
+  JSON
+  TEXTAREA
+}
+
+enum SettingMode {
+  SINGLE
+  MULTIPLE
+  NESTED
+}
+
+enum SectionType {
+  HERO
+  CONTENT
+  GRID
+  CAROUSEL
+  BANNER
+  FORM
+}
+
+// Content types that can be placed in sections
+enum ContentType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+  BUTTON
+  CUSTOM
+  LIST // New type for nested content
+}
+
+// Position/layout options
+enum ContentPosition {
+  LEFT
+  CENTER
+  RIGHT
+  TOP
+  BOTTOM
+}
+
+enum MediaType {
+  VIDEO
+  PDF
+  PRESENTATION
+  DOCUMENT
+  IMAGE
+  OTHER
+}
+
+enum MetaRobots {
+  INDEX_FOLLOW
+  INDEX_NOFOLLOW
+  NOINDEX_FOLLOW
+  NOINDEX_NOFOLLOW
+}
+
+enum UploadType {
+  IMAGE
+  VIDEO
+  DOCUMENT
+  PDF
+  OTHER
+}
+
+enum SettingPlatform {
+  ALL
+  WEB
+  MOBILE
+  DESKTOP
+}
+
+// A user represents an admin, instructor, or student
+model User {
+  id                   String                 @id @default(cuid())
+  email                String                 @unique
+  password             String
+  name                 String
+  role                 Role                   @default(STUDENT)
+  status               UserStatus             @default(PENDING_VERIFICATION)
+  avatar               String?
+  bio                  String?                @db.Text
+  phoneNumber          String?
+  website              String?
+  socialLinks          Json? // Store social media links
+  timezone             String?
+  preferences          Json? // Store user preferences
+  enable2FA            Boolean                @default(false)
+  isoauthuser          Boolean                @default(false) // Indicates if the user is created via OAuth
+  authorizedCourses    Json? // [{courseId: String, slug: String},...so on]
+  otpVerifications     OtpVerification[]
+  courses              Course[]               @relation("EnrolledCourses")
+  assignments          Assignment[]
+  comments             Comment[]
+  payments             Payment[]
+  certifications       Certification[]
+  progress             Progress[]
+  lastLoginAt          DateTime?
+  Course               Course[]
+  AssignmentSubmission AssignmentSubmission[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  Upload               Upload[]
+  Blog                 Blog[]
+  CourseReview         CourseReview[]
+}
+
+model OtpVerification {
+  id        String   @id @default(cuid())
+  userId    String
+  otp       String
+  type      String?  @default("EMAIL") // "EMAIL" or "2FA"
+  expiresAt DateTime
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+// A course is a collection of topics and lessons
+model Course {
+  id                      String          @id @default(cuid())
+  title                   String
+  slug                    String          @unique
+  description             String          @db.Text
+  status                  CourseStatus    @default(DRAFT)
+  price                   Float
+  specialPrice            Float?
+  specialPriceDescription String?         @db.Text
+  thumbnail               String?
+  duration                Int? // Course duration in minutes
+  isPublic                Boolean         @default(false)
+  objectives              String[] // Learning objectives
+  topics                  Topic[] // Collection of topics
+  lessons                 Lesson[] // Individual lessons within topics
+  instructor              User            @relation(fields: [instructorId], references: [id])
+  instructorId            String
+  students                User[]          @relation("EnrolledCourses")
+  assignments             Assignment[]
+  comments                Comment[]
+  certifications          Certification[]
+  payments                Payment[]
+  progress                Progress[]
+  rating                  Float?
+  enrollmentCount         Int             @default(0)
+
+  // Meta information
+  metaTitle       String?
+  metaDescription String?    @db.Text
+  metaRobots      MetaRobots @default(INDEX_FOLLOW)
+  metaCanonical   String?
+
+  publishedAt  DateTime?
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  CourseReview CourseReview[]
+}
+
+// A lesson is a collection of topics
+model Lesson {
+  id          String       @id @default(cuid())
+  isPublic    Boolean      @default(false)
+  title       String
+  slug        String?      @unique
+  description String?      @db.Text
+  status      LessonStatus @default(DRAFT)
+  order       Int // To maintain lesson sequence
+  duration    Int? // Lesson duration in minutes (Sum of topic durations)
+
+  // Main content (similar to Topic)
+  mediaType MediaType?
+  mediaUrl  String? // Main content URL (video/pdf/etc)
+
+  // Additional materials
+  attachments Json? // Array of additional resources/attachments
+
+  course    Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  courseId  String
+  topics    Topic[] // Topics within this lesson
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([courseId, order])
+}
+
+// Updated Topic model with status
+model Topic {
+  id          String      @id @default(cuid())
+  isPublic    Boolean     @default(false)
+  title       String
+  slug        String?     @unique
+  description String?     @db.Text
+  status      TopicStatus @default(DRAFT)
+  type        LessonType  @default(VIDEO)
+  order       Int // Order within the lesson
+  duration    Int? // Topic duration in minutes
+
+  // Main content
+  mediaType MediaType?
+  mediaUrl  String // Main content URL (video/pdf/etc)
+
+  // Additional materials
+  attachments Json? // Array of additional resources/attachments
+
+  // Lesson relationship
+  lesson   Lesson @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  lessonId String
+
+  // Course relationship (kept for direct access)
+  course   Course @relation(fields: [courseId], references: [id])
+  courseId String
+
+  // Additional metadata
+  keywords String[] // Searchable keywords
+
+  //Last viewed by user
+  lastViewedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([lessonId, order])
+}
+
+// An assignment is a task given to students to complete and submit
+model Assignment {
+  id          String           @id @default(cuid())
+  title       String
+  description String           @db.Text
+  status      AssignmentStatus @default(DRAFT)
+
+  // Instructor materials
+  instructions String? @db.Text
+  attachments  Json? // Array of attachment objects with {name, url, type}
+  maxScore     Float?
+  weightage    Float? // Percentage weightage in course grade
+
+  // Course and instructor relationship
+  course   Course @relation(fields: [courseId], references: [id])
+  courseId String
+
+  // Student submissions
+  submissions AssignmentSubmission[]
+
+  // Deadlines
+  startDate DateTime?
+  dueDate   DateTime?
+
+  // Metadata
+  User      User?    @relation(fields: [userId], references: [id])
+  userId    String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A student submission for an assignment (formerly StudentSubmission)
+model AssignmentSubmission {
+  id           String     @id @default(cuid())
+  assignment   Assignment @relation(fields: [assignmentId], references: [id], onDelete: Cascade)
+  assignmentId String
+  student      User       @relation(fields: [studentId], references: [id])
+  studentId    String
+
+  // Submission content
+  textContent String? @db.Text
+  attachments Json?
+
+  // Review details
+  status     AssignmentStatus @default(DRAFT)
+  grade      Float?
+  feedback   String?          @db.Text
+  reviewedBy String?
+  reviewedAt DateTime?
+
+  // Submission history
+  attempts          Int                 @default(1)
+  submittedAt       DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  submissionHistory SubmissionHistory[] // Changed to camelCase
+
+  @@unique([assignmentId, studentId])
+}
+
+model SubmissionHistory {
+  id           String               @id @default(cuid())
+  submission   AssignmentSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId String
+
+  // Snapshot of submission data
+  textContent String?          @db.Text
+  attachments Json?
+  status      AssignmentStatus
+  grade       Float?
+  feedback    String?          @db.Text
+
+  // Metadata
+  version      Int // Track version number
+  changedBy    String // User who made the change
+  changeReason String? // Optional reason for change
+  createdAt    DateTime @default(now())
+
+  @@index([submissionId])
+}
+
+// Student progress tracking for courses
+model Progress {
+  id                        String   @id @default(cuid())
+  student                   User     @relation(fields: [studentId], references: [id])
+  studentId                 String
+  course                    Course   @relation(fields: [courseId], references: [id])
+  courseId                  String
+  completedLessons          Int      @default(0)
+  totalLessons              Int
+  completedLessonIds        String[]
+  completedTopicIds         String[]
+  totalTopics               Int
+  assignmentProgressCounted Boolean  @default(false)
+  completionRate            Float    @default(0) //Calculated based on completed & total lessons
+  createdAt                 DateTime @default(now())
+  updatedAt                 DateTime @updatedAt
+
+  @@unique([studentId, courseId])
+}
+
+// Certificates issued to students for course completion
+model Certification {
+  id             String   @id @default(cuid())
+  student        User     @relation(fields: [studentId], references: [id])
+  studentId      String
+  course         Course   @relation(fields: [courseId], references: [id])
+  courseId       String
+  certificateUrl String?
+  issuedAt       DateTime @default(now())
+
+  @@unique([studentId, courseId])
+}
+
+// Payment details for courses
+model Payment {
+  id            String        @id @default(cuid())
+  student       User          @relation(fields: [studentId], references: [id])
+  studentId     String
+  course        Course        @relation(fields: [courseId], references: [id])
+  courseId      String
+  amount        Float
+  status        PaymentStatus @default(PENDING)
+  transactionId String?       @unique
+  paymentMethod String?
+  currency      String        @default("USD")
+  createdAt     DateTime      @default(now())
+  completedAt   DateTime?
+}
+
+// A comment on a course 
+// Modified Comment model
+model Comment {
+  id       String @id @default(cuid())
+  text     String @db.Text
+  author   User   @relation(fields: [authorId], references: [id])
+  authorId String
+
+  // Target type and relationships
+  target     String @default("COURSE") // "COURSE", "LESSON", or "TOPIC"
+  targetSlug String // Slug of the target (course, lesson, or topic)
+
+  isEdited  Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  Course    Course?  @relation(fields: [courseId], references: [id])
+  courseId  String?
+
+  @@index([target, targetSlug]) // Add index for efficient queries
+}
+
+// A generic contact form message
+model ContactMessage {
+  id          String    @id @default(cuid())
+  name        String
+  email       String
+  subject     String?
+  message     String    @db.Text
+  responded   Boolean   @default(false)
+  respondedAt DateTime?
+  createdAt   DateTime  @default(now())
+  priority    String? // High, Medium, Low
+}
+
+// Main settings model for managing configuration
+model Setting {
+  id          String          @id @default(cuid())
+  title       String
+  slug        String          @unique
+  order       Int             @default(0)
+  description String?         @db.Text
+  mode        SettingMode     @default(SINGLE)
+  dataType    SettingDataType
+  value       Json? // Stores the actual setting value
+  isActive    Boolean         @default(true)
+  platform    SettingPlatform @default(ALL) // New field for platform specificity
+
+  // For nested settings
+  parent   Setting?  @relation("SettingHierarchy", fields: [parentId], references: [id])
+  parentId String?
+  children Setting[] @relation("SettingHierarchy")
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Add an index on slug for faster lookups
+  @@index([slug])
+}
+
+model PageConfig {
+  id           String   @id @default(cuid())
+  customScript String?  @db.Text
+  customCss    String?  @db.Text
+  metaTags     Json?
+  analytics    Json?
+  maintenance  Boolean  @default(false)
+  updatedAt    DateTime @updatedAt
+}
+
+model Page {
+  id           String    @id @default(cuid())
+  title        String
+  slug         String    @unique
+  description  String?   @db.Text
+  schema       String?
+  pathname     String?   @unique
+  metaData     Json? // SEO and other metadata
+  metaTitle    String?
+  metaDesc     String?
+  customClass  String?
+  customStyles Json?
+  canonicalUrl String?
+  sectionsConfig Json?   // JSON config describing attached sections (library or inline)
+  sections     Section[]
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+// A section represents a distinct area on the page
+model Section {
+  id             String       @id @default(cuid())
+  type           SectionType?
+  backgroundType String?
+  title          String?
+  slug           String?      @unique
+  order          Int // Control display order
+  component      String?
+  isActive       Boolean      @default(true)
+  // Layout configuration
+  minHeight      Int?
+  maxHeight      Int?
+  columns        Int          @default(1)
+  padding        Json? // { top, right, bottom, left }
+  margin         Json? // { top, right, bottom, left }
+
+  // Style configuration
+  backgroundColor String?
+  backgroundImage String?
+  customClass     String?
+  customStyles    Json? // Additional CSS properties
+
+  // Content items within the section
+  contents Content[]
+
+  // Page relationship
+  page     Page    @relation(fields: [pageId], references: [id], onDelete: Cascade)
+  pageId   String
+  pageSlug String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Content items that go inside sections
+model Content {
+  id           String           @id @default(cuid())
+  type         ContentType?
+  order        Int
+  position     ContentPosition? @default(CENTER)
+  title        String?
+  slug         String?          @unique
+  subtitle     String?
+  content      String?          @db.Text
+  mediaUrl     String?
+  actionUrl    String?
+  settings     Json?
+  metadata     Json?
+  customClass  String?
+  customStyles Json?
+
+  // Section relationship
+  section     Section @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  sectionId   String
+  sectionSlug String?
+
+  // New fields for nested content support
+  parent   Content?  @relation("NestedContent", fields: [parentId], references: [id], onDelete: Cascade)
+  parentId String?
+  children Content[] @relation("NestedContent")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Add index for better query performance
+  @@index([parentId])
+}
+
+model ErrorHandler {
+  id            String   @id @default(cuid())
+  error_code    String   @unique
+  error_message Json // Will store multilingual error messages
+  category      String? // e.g., 'validation', 'auth', 'business_logic'
+  http_code     Int      @default(500)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([error_code])
+}
+
+model SuccessHandler {
+  id              String   @id @default(cuid())
+  success_code    String   @unique
+  success_message Json // Will store multilingual success messages
+  category        String? // e.g., 'auth', 'course', 'payment'
+  http_code       Int      @default(200)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([success_code])
+}
+
+//Upload Model
+
+model Upload {
+  id          String     @id @default(cuid())
+  isConfirmed Boolean    @default(false)
+  filename    String // Original filename
+  fileType    UploadType @default(OTHER)
+  mimeType    String // MIME type of the file
+  size        Int // File size in bytes
+  url         String? // Only cloudfront URL
+  key         String // S3 key/path
+  slug        String     @unique // Public slug for access
+  bucket      String // S3 bucket name
+  metadata    Json? // Additional metadata
+  isPublic    Boolean    @default(false)
+  uploadedBy  User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId      String
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  @@index([slug])
+  @@index([userId])
+}
+
+model Blog {
+  id               String    @id @default(cuid())
+  title            String    @db.VarChar(255)
+  slug             String    @unique
+  summary          String    @db.Text // For thumbnails
+  content          String    @db.Text
+  image            String?
+  metaTitle        String    @db.VarChar(255)
+  metaDescription  String    @db.Text
+  author           String
+  authorLink       String?
+  authorProfilePic String?
+  showUpdateDate   Boolean   @default(false)
+  createdAt        DateTime  @default(now())
+  publishedDate    DateTime?
+  updatedAt        DateTime  @updatedAt
+  published        Boolean   @default(false)
+
+  // Keeping the author relation
+  user   User   @relation(fields: [userId], references: [id])
+  userId String
+}
+
+//Notification
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String // ADMIN or STUDENT
+  message   String
+  isRead    Boolean  @default(false)
+  metadata  Json? // Additional data like courseId, assignmentId etc
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model CourseReview {
+  id          String  @id @default(cuid())
+  rating      Float // Rating out of 5
+  title       String? // Optional review title
+  content     String  @db.Text
+  isPublic    Boolean @default(true)
+  isApproved  Boolean @default(false)
+  isAnonymous Boolean @default(false)
+
+  // Relationships
+  student    User   @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  studentId  String
+  course     Course @relation(fields: [courseSlug], references: [slug], onDelete: Cascade)
+  courseSlug String
+
+  // Metadata
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([studentId, courseSlug])
+  @@index([courseSlug])
+  @@index([rating])
+}

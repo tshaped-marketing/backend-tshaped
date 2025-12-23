@@ -1,0 +1,29 @@
+export const JWT_SECRET: string = process.env.JWT_SECRET as string;
+export const OTP_EMAIL: string = process.env.OTP_EMAIL as string;
+export const NODE_ENV: string = process.env.NODE_ENV as string;
+export const FRONTEND_URL: string = process.env.FRONTEND_URL as string;
+export const STRIPE_WEBHOOK_SECRET: string = process.env.STRIPE_WEBHOOK_SECRET as string;
+export const STRIPE_SECRET_KEY: string = process.env.STRIPE_SECRET_KEY as string;
+export const REDIS_CONNECTION_HOST: string = process.env.REDIS_CONNECTION_HOST as string;
+export const REDIS_CONNECTION_PORT: string = process.env.REDIS_CONNECTION_PORT as string;
+export const S3_ACCESS_KEY_ID: string = process.env.S3_ACCESS_KEY_ID as string;
+export const S3_SECRET_KEY: string = process.env.S3_SECRET_KEY as string;
+export const S3_REGION: string = process.env.S3_REGION as string;
+export const S3_BUCKET: string = process.env.S3_BUCKET as string;
+export const CLOUDFRONT_URL: string = process.env.CLOUDFRONT_URL as string;
+export const CLOUDFRONT_PRIVATE_KEY: string = `-----BEGIN PRIVATE KEY-----
+${process.env.CLOUDFRONT_PRIVATE_KEY}
+-----END PRIVATE KEY-----` as string;
+export const CLOUDFRONT_KEY_PAIR_ID: string = process.env.CLOUDFRONT_KEY_PAIR_ID as string;
+export const ADMIN_IDS: string[] = JSON.parse(process.env.ADMIN_IDS || '[]');
+export const MICROSOFT_CLIENT_ID: string = process.env.MICROSOFT_CLIENT_ID as string;
+export const MICROSOFT_CLIENT_SECRET: string = process.env.MICROSOFT_CLIENT_SECRET as string;
+export const MICROSOFT_AUTHORITY: string = process.env.MICROSOFT_AUTHORITY as string;
+export const API_KEY: string = process.env.API_KEY as string;
+export const LOKI_BASIC_AUTH: string = process.env.LOKI_BASIC_AUTH as string;
+export const LOKI_HOST: string = process.env.LOKI_HOST as string;
+export const SES_ACCESS_KEY_ID: string = process.env.SES_ACCESS_KEY_ID as string;
+export const SES_SECRET_KEY: string = process.env.SES_SECRET_KEY as string;
+export const FACEBOOK_APP_ID: string = process.env.FACEBOOK_APP_ID as string;
+export const FACEBOOK_APP_SECRET: string = process.env.FACEBOOK_APP_SECRET as string;
+export const GOOGLE_CLIENT_ID: string = process.env.GOOGLE_CLIENT_ID as string;

@@ -1,0 +1,20 @@
+import { Router } from 'express';
+import courseStudentRouter from './course.routes.js';
+import commentStudentRouter from './comment.routes.js';
+import progressStudentRouter from './progress.routes.js';
+import submissionStudentRouter from './assignmentSubmissions.routes.js';
+import topicStudentRouter from './topic.routes.js';
+import lessonStudentRouter from './lesson.routes.js';
+import { profileStudentRouter } from './profile.routes.js';
+import { studentCertificateRouter } from './certificate.routes.js';
+
+const studentRouter = Router();
+studentRouter.use('/course', courseStudentRouter);
+studentRouter.use('/comments', commentStudentRouter);
+studentRouter.use('/progress', progressStudentRouter);
+studentRouter.use('/submissions', submissionStudentRouter);
+studentRouter.use('/topics', topicStudentRouter);
+studentRouter.use('/lessons', lessonStudentRouter);
+studentRouter.use('/profile', profileStudentRouter);
+studentRouter.use('/certificates', studentCertificateRouter);
+export default studentRouter;

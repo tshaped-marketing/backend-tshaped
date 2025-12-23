@@ -1,0 +1,2 @@
+-- AlterTable
+ALTER TABLE "Setting" ADD COLUMN     "order" INTEGER NOT NULL DEFAULT 0;
