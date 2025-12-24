@@ -7,19 +7,13 @@ import {
   getPageBySlug,
   getPages,
   updatePage,
-  updatePageSections,
 } from '../controllers/layoutControllers/page.controller.js';
 import {
   createSection,
-  deleteLibrarySection,
   deleteSection,
-  getLibrarySectionBySlug,
   getSectionBySlug,
-  getSectionLibrary,
-  getSectionLibraryById,
   getSections,
   reorderSections,
-  updateLibrarySection,
   updateSection,
 } from '../controllers/layoutControllers/section.controller.js';
 import {
@@ -1562,9 +1556,6 @@ const layoutRouter = express.Router();
 layoutRouter.get('/pages', catchAsync(getPages));
 layoutRouter.get('/pages/:slug', catchAsync(getPageBySlug));
 layoutRouter.get('/pages/pathname', catchAsync(getPageByPathname));
-layoutRouter.get('/sections', catchAsync(getSectionLibrary));
-layoutRouter.get('/sections/:id', catchAsync(getSectionLibraryById));
-layoutRouter.get('/sections/slug/:slug', catchAsync(getLibrarySectionBySlug));
 layoutRouter
   .use(catchAsync(authenticate))
   .get('/pages/:pageSlug/sections', catchAsync(authorize(['admin_only'])), catchAsync(getSections));
@@ -1588,19 +1579,16 @@ layoutRouter.use(catchAsync(authenticate) as MiddlewareType);
 
 layoutRouter.post('/pages', catchAsync(authorize(['admin_only'])), catchAsync(createPage));
 layoutRouter.put('/pages/:id', catchAsync(authorize(['admin_only'])), catchAsync(updatePage));
-layoutRouter.patch(
-  '/pages/:id/sections',
-  catchAsync(authorize(['admin_only'])),
-  catchAsync(updatePageSections),
-);
 layoutRouter.delete('/pages/:id', catchAsync(authorize(['admin_only'])), catchAsync(deletePage));
 
-// Page-specific sections (inline sections)
-layoutRouter.get('/pages/:pageSlug/inline-sections', catchAsync(authorize(['admin_only'])), catchAsync(getSections));
+layoutRouter.get('/sections/slug/:slug', catchAsync(getSectionBySlug));
 layoutRouter.post('/sections', catchAsync(authorize(['admin_only'])), catchAsync(createSection));
 layoutRouter.put('/sections/:id', catchAsync(authorize(['admin_only'])), catchAsync(updateSection));
-layoutRouter.delete('/sections/:id', catchAsync(authorize(['admin_only'])), catchAsync(deleteSection));
-
+layoutRouter.delete(
+  '/sections/:id',
+  catchAsync(authorize(['admin_only'])),
+  catchAsync(deleteSection),
+);
 layoutRouter.post(
   '/pages/:pageSlug/sections/reorder',
   catchAsync(authorize(['admin_only'])),

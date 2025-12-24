@@ -507,7 +507,6 @@ model Page {
   customClass  String?
   customStyles Json?
   canonicalUrl String?
-  sectionsConfig Json?   // JSON config describing attached sections (library or inline)
   sections     Section[]
   isActive     Boolean   @default(true)
   createdAt    DateTime  @default(now())
@@ -523,7 +522,6 @@ model Section {
   slug           String?      @unique
   order          Int // Control display order
   component      String?
-  isActive       Boolean      @default(true)
   // Layout configuration
   minHeight      Int?
   maxHeight      Int?
@@ -668,6 +666,36 @@ model Notification {
   updatedAt DateTime @updatedAt
 
   @@index([userId])
+}
+
+model HeroComponent {
+  id         String   @id @default(cuid())
+  slug       String   @unique
+  title      String
+  paragraph  String   @db.Text
+  imageUrl   String
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  pageUsages PageHeroComponent[]
+}
+
+model PageHeroComponent {
+  id              String        @id @default(cuid())
+  pageSlug        String
+  heroComponent   HeroComponent @relation(fields: [heroComponentId], references: [id])
+  heroComponentId String
+
+  overrideTitle     String?
+  overrideParagraph String?    @db.Text
+  overrideImageUrl  String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([pageSlug, heroComponentId])
 }
 
 model CourseReview {

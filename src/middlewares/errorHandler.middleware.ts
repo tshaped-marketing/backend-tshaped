@@ -16,17 +16,25 @@ const formatErrorResponse = (
   statusCode: number = 500,
 ): ErrorResponse | DetailedErrorResponse => {
   const isDevelopment = NODE_ENV === 'development';
-  // Always include name/stack/details for debugging (temporary)
-  const baseResponse: DetailedErrorResponse = {
+  const baseResponse: ErrorResponse = {
     success: false,
     error: {
       status: statusCode,
       message: err.message,
-      name: err.name,
-      stack: err.stack,
-      details: err instanceof AppError ? err?.details : undefined,
     },
   };
+
+  if (isDevelopment) {
+    return {
+      ...baseResponse,
+      error: {
+        ...baseResponse.error,
+        name: err.name,
+        stack: err.stack,
+        details: err instanceof AppError ? err?.details : undefined,
+      },
+    };
+  }
 
   return baseResponse;
 };
@@ -70,9 +78,10 @@ const catchAsync = (fn: (req: Request, res: Response, next: NextFunction) => Pro
 const throwError = async (errorCode: string, lang: string = 'en', details?: unknown) => {
   try {
     const errorConfig = await errorProvider(errorCode, lang);
-    if (!errorConfig || !errorConfig.error_message || errorConfig.http_code === undefined || errorConfig.http_code === null) {
-      throw new AppError(500, 'Internal Server Error');
+    if (!errorConfig) {
+      throw new AppError(500, `Unknown error code: ${errorCode}`);
     }
+
     const error = new AppError(
       errorConfig.http_code,
       errorConfig.error_message[lang as keyof ErrorMessage],
@@ -99,11 +108,12 @@ export const handleResponseError = async (
 ): Promise<Response> => {
   try {
     const errorConfig = await errorProvider(errorCode, lang);
-    if (!errorConfig || !errorConfig.error_message || errorConfig.http_code === undefined || errorConfig.http_code === null) {
-      const fallbackError = new AppError(500, 'Internal Server Error');
+    if (!errorConfig) {
+      const fallbackError = new AppError(500, `Unknown error code: ${errorCode}`);
       handleError(fallbackError, res);
       return res;
     }
+
     const error = new AppError(
       errorConfig.http_code,
       errorConfig.error_message[lang as keyof ErrorMessage],

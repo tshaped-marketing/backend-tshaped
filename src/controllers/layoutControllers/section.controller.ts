@@ -1,9 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import {
-  CreateLibrarySectionSchema,
-  CreateSectionSchema,
-  UpdateSectionSchema,
-} from '../../zodSchemas/layout.schema.js';
+import { CreateSectionSchema, UpdateSectionSchema } from '../../zodSchemas/layout.schema.js';
 import prismaClient from '../../prisma/prisma.client.js';
 import { throwError } from '../../middlewares/errorHandler.middleware.js';
 import { nanoid } from 'nanoid';
@@ -11,304 +7,69 @@ import { handleCachedResponse } from '../../utils/handleCacheResponse.js';
 import redisService from '../../config/redis.config.js';
 import executeBackgroundTasks from '../../utils/executeBackgroundTasks.js';
 import { titleToSlug } from '../../utils/titleToSlug.js';
-import { getAllSectionsByPageSlug_TTL, getSectionBySlug_TTL } from '../../constants/redis.cacheTTL.js';
+import {
+  getAllSectionsByPageSlug_TTL,
+  getSectionBySlug_TTL,
+} from '../../constants/redis.cacheTTL.js';
 
-const SECTION_LIBRARY_SLUG = 'section-library';
+const createSection = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+  const validatedData = CreateSectionSchema.parse(req.body);
+  const { pageSlug, ...sectionData } = validatedData;
 
-const ensureSectionLibraryPage = async () => {
-  let page = await prismaClient.page.findUnique({
-    where: { slug: SECTION_LIBRARY_SLUG },
+  // Generate slug if not provided
+  if (!sectionData.slug) {
+    sectionData.slug = titleToSlug(validatedData.title!);
+  }
+
+  const page = await prismaClient.page.findUnique({
+    where: { slug: pageSlug },
   });
 
   if (!page) {
-    page = await prismaClient.page.create({
-      data: {
-        title: 'Section Library',
-        slug: SECTION_LIBRARY_SLUG,
-        description: 'Global reusable sections library',
-        isActive: true,
-      },
-    });
+    return await throwError('SECTION001');
   }
 
-  return page;
-};
-
-const createSection = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const validatedData = CreateSectionSchema.parse(req.body);
-    const { pageSlug, ...sectionData } = validatedData;
-
-    if (!sectionData.slug) {
-      sectionData.slug = titleToSlug(validatedData.title!);
-    }
-
-    const page = await prismaClient.page.findUnique({
-      where: { slug: pageSlug },
-    });
-
-    if (!page) {
-      return await throwError('SECTION001');
-    }
-
-    const highestOrderSection = await prismaClient.section.findFirst({
-      where: { pageId: page.id },
-      orderBy: { order: 'desc' },
-    });
-
-    const newOrder = highestOrderSection ? highestOrderSection.order + 1 : 1;
-
-    const section = await prismaClient.section.create({
-      data: {
-        ...sectionData,
-        pageSlug: pageSlug,
-        pageId: page.id,
-        order: newOrder,
-      },
-      include: {
-        contents: true,
-      },
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Section created successfully',
-      data: section,
-    });
-
-    executeBackgroundTasks(
-      [
-        async () => {
-          return await redisService.invalidateMultipleKeys([
-            `getPageBySlug:${pageSlug}`,
-            'list_pages',
-            `getSecByPage:${section.pageSlug}`,
-          ]);
-        },
-      ],
-      'updateSection',
-    );
-  } catch (e: any) {
-    console.error('createSection error', e);
-    res.status(500).json({
-      success: false,
-      message: e?.message || 'Internal Server Error',
-      code: e?.code,
-      meta: e?.meta,
-      stack: e?.stack,
-    });
-  }
-};
-
-// ===== Section Library (reusable blocks) =====
-
-// GET /api/layout/sections - list library sections
-const getSectionLibrary = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const libraryPage = await ensureSectionLibraryPage();
-
-  const sections = await prismaClient.section.findMany({
-    where: { pageId: libraryPage.id },
-    select: {
-      id: true,
-      slug: true,
-      type: true,
-      title: true,
-      isActive: true,
-      updatedAt: true,
-      order: true,
-    },
-    orderBy: {
-      order: 'asc',
-    },
-  });
-
-  res.status(200).json({
-    success: true,
-    data: sections,
-  });
-};
-
-// Helper to build nested contents tree (same shape as existing ContentType)
-const buildNestedContents = async (sectionId: string) => {
-  const contents = await prismaClient.content.findMany({
-    where: { sectionId, parentId: null },
-    orderBy: { order: 'asc' },
-    include: {
-      children: {
-        orderBy: { order: 'asc' },
-        include: {
-          children: {
-            orderBy: { order: 'asc' },
-            include: {
-              children: {
-                orderBy: { order: 'asc' },
-              },
-            },
-          },
-        },
-      },
-    },
-  });
-
-  return contents;
-};
-
-// GET /api/layout/sections/:id - full library section by id or slug
-const getSectionLibraryById = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { id } = req.params;
-  const libraryPage = await ensureSectionLibraryPage();
-
-  const where = id.startsWith('cm') ? { id } : { slug: id };
-
-  const section = await prismaClient.section.findFirst({
-    where: {
-      ...where,
-      pageId: libraryPage.id,
-    },
-  });
-
-  if (!section) {
-    return await throwError('SECTION002');
-  }
-
-  const contents = await buildNestedContents(section.id);
-
-  res.status(200).json({
-    success: true,
-    data: {
-      ...section,
-      contents,
-    },
-  });
-};
-
-// GET /api/layout/sections/slug/:slug - full library section by slug
-const getLibrarySectionBySlug = async (
-  req: Request,
-  res: Response,
-  next: NextFunction,
-): Promise<void> => {
-  const { slug } = req.params;
-  const libraryPage = await ensureSectionLibraryPage();
-
-  const section = await prismaClient.section.findFirst({
-    where: {
-      slug,
-      pageId: libraryPage.id,
-    },
-  });
-
-  if (!section) {
-    return await throwError('SECTION002');
-  }
-
-  const contents = await buildNestedContents(section.id);
-
-  res.status(200).json({
-    success: true,
-    data: {
-      ...section,
-      contents,
-    },
-  });
-};
-
-// POST /api/layout/sections - create library section
-const createLibrarySection = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const validatedData = CreateLibrarySectionSchema.parse(req.body);
-
-  const libraryPage = await ensureSectionLibraryPage();
-
-  const { slug, title, ...rest } = validatedData;
-
-  const finalSlug = slug ?? (title ? titleToSlug(title) : nanoid());
-
+  // Get the highest order value for this page's sections
   const highestOrderSection = await prismaClient.section.findFirst({
-    where: { pageId: libraryPage.id },
+    where: { pageId: page.id },
     orderBy: { order: 'desc' },
   });
 
+  // Set the new order value to be one more than the highest existing order
+  // or 1 if there are no existing sections
   const newOrder = highestOrderSection ? highestOrderSection.order + 1 : 1;
 
   const section = await prismaClient.section.create({
     data: {
-      ...rest,
-      title,
-      slug: finalSlug,
-      pageId: libraryPage.id,
-      pageSlug: SECTION_LIBRARY_SLUG,
+      ...sectionData,
+      pageSlug: pageSlug,
+      pageId: page.id,
       order: newOrder,
+    },
+    include: {
+      contents: true,
     },
   });
 
   res.status(201).json({
     success: true,
-    message: 'Library section created successfully',
+    message: 'Section created successfully',
     data: section,
   });
-};
 
-// PATCH /api/layout/sections/:id - update library section
-const updateLibrarySection = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const validatedData = UpdateSectionSchema.parse(req.body);
-  const { id } = req.params;
-  const libraryPage = await ensureSectionLibraryPage();
-
-  const where = id.startsWith('cm') ? { id } : { slug: id };
-
-  const existingSection = await prismaClient.section.findFirst({
-    where: {
-      ...where,
-      pageId: libraryPage.id,
-    },
-  });
-
-  if (!existingSection) {
-    return await throwError('SECTION002');
-  }
-
-  if (validatedData.title && validatedData.title !== existingSection.title) {
-    validatedData.slug = titleToSlug(validatedData.title!);
-  }
-
-  const section = await prismaClient.section.update({
-    where: { id: existingSection.id },
-    data: validatedData,
-  });
-
-  res.status(200).json({
-    success: true,
-    message: 'Library section updated successfully',
-    data: section,
-  });
-};
-
-// DELETE /api/layout/sections/:id - delete library section
-const deleteLibrarySection = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  const { id } = req.params;
-  const libraryPage = await ensureSectionLibraryPage();
-
-  const where = id.startsWith('cm') ? { id } : { slug: id };
-
-  const existingSection = await prismaClient.section.findFirst({
-    where: {
-      ...where,
-      pageId: libraryPage.id,
-    },
-  });
-
-  if (!existingSection) {
-    return await throwError('SECTION002');
-  }
-
-  await prismaClient.section.delete({
-    where: { id: existingSection.id },
-  });
-
-  res.status(200).json({
-    success: true,
-    message: 'Library section deleted successfully',
-  });
+  // Invalidate cache
+  executeBackgroundTasks(
+    [
+      async () => {
+        return await redisService.invalidateMultipleKeys([
+          `getPageBySlug:${pageSlug}`,
+          'list_pages',
+          `getSecByPage:${section.pageSlug}`,
+        ]);
+      },
+    ],
+    'updateSection',
+  );
 };
 
 const getSections = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
@@ -563,10 +324,4 @@ export {
   deleteSection,
   reorderSections,
   getSectionBySlug,
-  getSectionLibrary,
-  getSectionLibraryById,
-  getLibrarySectionBySlug,
-  createLibrarySection,
-  updateLibrarySection,
-  deleteLibrarySection,
 };

@@ -13,13 +13,12 @@ import {
 import getAllParentIds from '../../utils/getContentParents.js';
 
 const createContent = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
-  try {
-    const validatedData = CreateContentSchema.parse(req.body);
+  const validatedData = CreateContentSchema.parse(req.body);
 
   // Check if section exists
-    const sectionExists = await prismaClient.section.findUnique({
-      where: { id: validatedData.sectionId },
-    });
+  const sectionExists = await prismaClient.section.findUnique({
+    where: { id: validatedData.sectionId },
+  });
 
   if (!sectionExists) {
     return await throwError('CONTENT002');
@@ -69,52 +68,47 @@ const createContent = async (req: Request, res: Response, next: NextFunction): P
     slug,
   };
 
-    const content = await prismaClient.content.create({
-      data: finalValidatedData as any,
-    });
+  const content = await prismaClient.content.create({
+    data: finalValidatedData as any,
+  });
 
-    res.status(201).json({
-      success: true,
-      message: 'Content created successfully',
-      data: content,
-    });
+  res.status(201).json({
+    success: true,
+    message: 'Content created successfully',
+    data: content,
+  });
   // Invalidate cache
-    executeBackgroundTasks(
-      [
-        async () => {
-          const [section, parentIds] = await Promise.all([
-            prismaClient.section.findUnique({
-              where: { id: content.sectionId },
-            }),
-            await getAllParentIds(content.id),
-          ]);
+  executeBackgroundTasks(
+    [
+      async () => {
+        const [section, parentIds] = await Promise.all([
+    prismaClient.section.findUnique({
+      where: { id: content.sectionId },
+    }),
+    await getAllParentIds(content.id)
+  ]);
 
-          const parentCacheKeys = parentIds.map(parentId => `getContentsByParentId:${parentId}`);
-          if (content.parentId) {
-            parentCacheKeys.push(`getContentsByParentId:${content.parentId}`);
-          }
-          const getContentsByIdKeys = parentIds.map(parentId => `getContentById:${parentId}`);
-          return await redisService.invalidateMultipleKeys([
-            ...new Set(parentCacheKeys),
-            ...new Set(getContentsByIdKeys),
-            `getSecByPage:${section!.pageSlug}`,
-            `getSec:${section!.slug}`,
-            `getPageBySlug:${section!.pageSlug}`,
-            `list_pages`,
-            `getContents:${content.sectionId}`,
-          ]);
-        },
-      ],
-      'createContent',
-    );
-  } catch (e) {
-    console.error('createContent error', e);
-    res.status(500).json({
-      success: false,
-      message: (e as Error).message,
-      stack: (e as Error).stack,
-    });
+  // Build all parent cache keys for the hierarchy
+  const parentCacheKeys = parentIds.map(parentId => `getContentsByParentId:${parentId}`);
+  
+  // Add immediate parent if it exists
+  if (content.parentId) {
+    parentCacheKeys.push(`getContentsByParentId:${content.parentId}`);
   }
+  const getContentsByIdKeys = parentIds.map(parentId => `getContentById:${parentId}`); 
+        return await redisService.invalidateMultipleKeys([
+           ...new Set(parentCacheKeys), // Remove duplicates
+              ...new Set(getContentsByIdKeys), // Remove duplicates
+          `getSecByPage:${section!.pageSlug}`,
+          `getSec:${section!.slug}`,
+          `getPageBySlug:${section!.pageSlug}`,
+          `list_pages`,
+          `getContents:${content.sectionId}`,
+        ]);
+      },
+    ],
+    'createContent',
+  );
 };
 
 // Bulk Content Creation Controller
@@ -265,25 +259,15 @@ const createBulkContent = async (req: Request, res: Response, next: NextFunction
       ],
       'createBulkContent',
     );
-  } catch (error: any) {
+  } catch (error) {
     console.error('Bulk content creation error:', error);
-
-    // Handle section not found
+    
+    // Handle the section not found error specifically
     if (error instanceof Error && error.message === 'CONTENT002') {
-      await throwError('CONTENT002');
-      return;
+      return next(await throwError('CONTENT002'));
     }
-
-    // Surface raw error for debugging
-    res.status(500).json({
-      success: false,
-      message: error?.message || 'Failed to create content',
-      code: error?.code,
-      meta: error?.meta,
-      stack: error?.stack,
-      details: error,
-    });
-    return;
+    
+    next(error);
   }
 };
 

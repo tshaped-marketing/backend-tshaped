@@ -33,6 +33,8 @@ import { NotificationService } from './services/notification.service.js';
 import { notificationRouter } from './routes/notification.routes.js';
 import studentRouter from './routes/student/studentRouterProvider.js';
 import courseReviewRouter from './routes/review.routes.js';
+import { heroComponentRouter } from './routes/heroComponent.routes.js';
+import { seedHeroComponents } from './utils/seedHeroComponents.js';
 import responseTime from 'response-time';
 import client from 'prom-client';
 import { logErrorLoki } from './utils/lokiConfig.js';
@@ -98,7 +100,7 @@ export const io = new Server(httpServer, {
   },
 });
 
-const PORT = Number(process.env.PORT) || 3001;
+const PORT = 3000;
 
 // Socket.IO connection handling
 io.on('connection', socket => {
@@ -244,6 +246,7 @@ app.use('/api/error-handlers', errorHandlerRouter);
 app.use('/api/success-handlers', successHandlerRouter);
 app.use('/api/reports', reportRouter);
 app.use('/api/course-reviews', courseReviewRouter);
+app.use('/api/hero-components', heroComponentRouter);
 // Add notification routes
 app.use('/api/notifications', notificationRouter);
 
@@ -258,7 +261,14 @@ app.use(notFoundHandler);
 
 // Start server using httpServer instead of app.listen
 export const startServer = () => {
-  httpServer.listen(PORT, () => {
+  httpServer.listen(PORT, async () => {
+    try {
+      await seedHeroComponents();
+      console.log('Hero components seeded');
+    } catch (e) {
+      console.error('Failed to seed hero components', e);
+    }
+
     console.log(`Server running on port ${PORT}`);
     logErrorLoki(`Server running on port ${PORT}`, false);
   });

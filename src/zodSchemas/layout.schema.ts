@@ -47,20 +47,6 @@ export const CreatePageSchema = z.object({
 
 export const UpdatePageSchema = CreatePageSchema.partial();
 
-// Page sections composition (inline + library references)
-export const PageSectionSourceSchema = z.enum(['inline', 'section-library']);
-
-export const PageSectionConfigItemSchema = z.object({
-  source: PageSectionSourceSchema,
-  position: z.number().int().min(0),
-  librarySectionSlug: z.string().optional(),
-  inlineSectionSlug: z.string().optional(),
-});
-
-export const UpdatePageSectionsSchema = z.object({
-  sections: z.array(PageSectionConfigItemSchema).min(0),
-});
-
 // Section schemas
 export const CreateSectionSchema = z.object({
   type: SectionTypeSchema.optional(),
@@ -82,9 +68,6 @@ export const CreateSectionSchema = z.object({
 });
 
 export const UpdateSectionSchema = CreateSectionSchema.omit({ pageSlug: true }).partial();
-
-// Section Library schemas (reusable sections not tied to a specific page)
-export const CreateLibrarySectionSchema = CreateSectionSchema.omit({ pageSlug: true });
 
 // Content schemas
 const BaseContentSchema = z.object({
