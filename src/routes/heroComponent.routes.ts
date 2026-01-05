@@ -5,6 +5,8 @@ import {
   updateHeroComponent,
   attachHeroToPage,
   getPageHero,
+  updatePageHero,
+  deletePageHero,
 } from '../controllers/heroComponent.controller.js';
 import { RouteType } from '../types/router.types.js';
 import { zodValidator } from '../middlewares/zodReqValidate.middleware.js';
@@ -12,6 +14,8 @@ import {
   updateHeroComponentSchema,
   attachHeroToPageSchema,
   getPageHeroSchema,
+  updatePageHeroSchema,
+  deletePageHeroSchema,
 } from '../zodSchemas/heroComponent.schema.js';
 
 const heroComponentRouter = Router()
@@ -74,6 +78,64 @@ const heroComponentRouter = Router()
    *         description: Page hero configuration created/updated
    */
   .post('/attach', zodValidator(attachHeroToPageSchema), catchAsync(attachHeroToPage as RouteType))
+  /**
+   * @swagger
+   * /api/hero-components/attach:
+   *   put:
+   *     tags: [Components]
+   *     summary: Update attached hero configuration for a page
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - pageSlug
+   *               - heroComponentId
+   *             properties:
+   *               pageSlug:
+   *                 type: string
+   *               heroComponentId:
+   *                 type: string
+   *               overrideTitle:
+   *                 type: string
+   *               overrideParagraph:
+   *                 type: string
+   *               overrideImageUrl:
+   *                 type: string
+   *               isActive:
+   *                 type: boolean
+   *     responses:
+   *       200:
+   *         description: Updated page hero configuration
+   */
+  .put('/attach', zodValidator(updatePageHeroSchema), catchAsync(updatePageHero as RouteType))
+  /**
+   * @swagger
+   * /api/hero-components/attach:
+   *   delete:
+   *     tags: [Components]
+   *     summary: Delete hero configuration for a page
+   *     requestBody:
+   *       required: true
+   *       content:
+   *         application/json:
+   *           schema:
+   *             type: object
+   *             required:
+   *               - pageSlug
+   *               - heroComponentId
+   *             properties:
+   *               pageSlug:
+   *                 type: string
+   *               heroComponentId:
+   *                 type: string
+   *     responses:
+   *       204:
+   *         description: Deleted successfully
+   */
+  .delete('/attach', zodValidator(deletePageHeroSchema), catchAsync(deletePageHero as RouteType))
   /**
    * @swagger
    * /api/hero-components/{id}:

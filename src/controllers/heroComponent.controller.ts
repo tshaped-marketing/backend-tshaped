@@ -92,6 +92,97 @@ export const attachHeroToPage = async (req: Request, res: Response, _next: NextF
   });
 };
 
+export const updatePageHero = async (req: Request, res: Response, _next: NextFunction) => {
+  const { pageSlug, heroComponentId, overrideTitle, overrideParagraph, overrideImageUrl, isActive } =
+    req.body;
+
+  // First verify the hero component exists
+  const hero = await prismaClient.heroComponent.findUnique({
+    where: { id: heroComponentId },
+  });
+
+  if (!hero) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Hero component not found',
+    });
+  }
+
+  // Check if page hero configuration already exists
+  const existing = await prismaClient.pageHeroComponent.findUnique({
+    where: {
+      pageSlug_heroComponentId: {
+        pageSlug,
+        heroComponentId,
+      },
+    },
+  });
+
+  // Use upsert: create if doesn't exist, update if it does
+  const updated = await prismaClient.pageHeroComponent.upsert({
+    where: {
+      pageSlug_heroComponentId: {
+        pageSlug,
+        heroComponentId,
+      },
+    },
+    update: {
+      overrideTitle: typeof overrideTitle === 'string' ? overrideTitle : existing?.overrideTitle ?? null,
+      overrideParagraph:
+        typeof overrideParagraph === 'string' ? overrideParagraph : existing?.overrideParagraph ?? null,
+      overrideImageUrl:
+        typeof overrideImageUrl === 'string' ? overrideImageUrl : existing?.overrideImageUrl ?? null,
+      isActive: typeof isActive === 'boolean' ? isActive : existing?.isActive ?? true,
+    },
+    create: {
+      pageSlug,
+      heroComponentId,
+      overrideTitle: overrideTitle ?? null,
+      overrideParagraph: overrideParagraph ?? null,
+      overrideImageUrl: overrideImageUrl ?? null,
+      isActive: typeof isActive === 'boolean' ? isActive : true,
+    },
+  });
+
+  res.status(200).json({
+    status: 'success',
+    data: {
+      usage: updated,
+    },
+  });
+};
+
+export const deletePageHero = async (req: Request, res: Response, _next: NextFunction) => {
+  const { pageSlug, heroComponentId } = req.body;
+
+  const existing = await prismaClient.pageHeroComponent.findUnique({
+    where: {
+      pageSlug_heroComponentId: {
+        pageSlug,
+        heroComponentId,
+      },
+    },
+  });
+
+  if (!existing) {
+    return res.status(404).json({
+      status: 'error',
+      message: 'Page hero configuration not found',
+    });
+  }
+
+  await prismaClient.pageHeroComponent.delete({
+    where: {
+      pageSlug_heroComponentId: {
+        pageSlug,
+        heroComponentId,
+      },
+    },
+  });
+
+  res.status(204).send();
+};
+
 export const getPageHero = async (req: Request, res: Response, _next: NextFunction) => {
   const { pageSlug } = req.query;
 
